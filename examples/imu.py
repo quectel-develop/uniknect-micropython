@@ -5,7 +5,7 @@ from lis2dh12 import LIS2DH12
 from st7735 import LCD
 # 初始化I2C
 i2c = machine.I2C(1, freq=400000)
-spi = machine.SPI(1, baudrate=40000000, polarity=0, phase=0)
+spi = machine.SPI(1, baudrate=20000000, polarity=0, phase=0)
 lcd = LCD(spi, dc_pin="F12", cs_pin="D14")
 lcd.set_rotation(0)
 # 初始化LIS2DH12

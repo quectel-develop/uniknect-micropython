@@ -40,7 +40,7 @@ aht20 = AHT20(i2c)
 lis2dh = LIS2DH12(i2c) 
 
 # 初始化SPI (LCD)
-spi = machine.SPI(1, baudrate=40000000, polarity=0, phase=0)
+spi = machine.SPI(1, baudrate=20000000, polarity=0, phase=0)
 lcd = LCD(spi, dc_pin='F12', cs_pin='D14')
 lcd.set_rotation(3)
 lcd.fill_screen(lcd.BLACK)
