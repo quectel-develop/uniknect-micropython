@@ -3,6 +3,7 @@ from quectel import BLE
 import _thread
 import machine
 from ahtx0 import AHT20
+
 # =========================
 # 全局常量
 # =========================
@@ -27,36 +28,60 @@ def str_to_hex(s):
     return ''.join(['%02X' % b for b in s.encode()])
 
 
-def notify_task(ble, semaphore):
+def notify_task(ble):
     global g_ble_connected
     global g_notify_enabled
     global g_notify_thread_running
-    i2c = machine.I2C(1, freq=400000)
-    devices = i2c.scan()
-    sensor = AHT20(i2c)
-    while g_notify_thread_running:
-        try:
-            if g_ble_connected and g_notify_enabled:
-                temp = sensor.temperature
-                temp_str = "{:.1f}".format(temp)
-                hum = sensor.relative_humidity
-                hum_str = "{:.1f}".format(hum)
-                ble.notify(CUSTOM_CHAR_UUID, len(temp_str), temp_str)
-                print("notify send:", temp_str)
-                ble.indicate(CUSTOM_CHAR_UUID1, len(hum_str), hum_str)
-                print("indicate send:", hum_str)
-            utime.sleep(1)
 
-        except Exception as e:
-            print("notify error:", e)
-            utime.sleep(1)
+    print("notify thread start")
+
+    try:
+        i2c = machine.I2C(1, freq=400000)
+        devices = i2c.scan()
+        print("i2c devices:", devices)
+
+        sensor = AHT20(i2c)
+
+        while g_notify_thread_running:
+            try:
+                if g_ble_connected and g_notify_enabled:
+                    temp = sensor.temperature
+                    temp_str = "{:.1f}".format(temp)
+
+                    hum = sensor.relative_humidity
+                    hum_str = "{:.1f}".format(hum)
+
+                    ble.notify(CUSTOM_CHAR_UUID, len(temp_str), temp_str)
+                    print("notify send:", temp_str)
+
+                    ble.indicate(CUSTOM_CHAR_UUID1, len(hum_str), hum_str)
+                    print("indicate send:", hum_str)
+
+                # 分段 sleep，退出更及时
+                for i in range(10):
+                    if not g_notify_thread_running:
+                        break
+                    utime.sleep_ms(100)
+
+            except Exception as e:
+                print("notify error:", e)
+
+                # 出错后也支持快速退出
+                for i in range(10):
+                    if not g_notify_thread_running:
+                        break
+                    utime.sleep_ms(100)
+
+    except Exception as e:
+        print("notify thread init error:", e)
+
     print("notify thread exit")
-    semaphore.release()
 
 
 def cb(evt):
     global g_ble_connected
     global g_notify_enabled
+
     print("evt =", evt)
 
     if evt["event"] == BLE.EVT_CONNECTED:
@@ -73,6 +98,7 @@ def cb(evt):
 
     elif evt["event"] == BLE.EVT_VAL_DATA:
         print("ch uuid =", hex(evt["uuid"]), "value =", evt["value"])
+
     elif evt["event"] == BLE.EVT_DESCDATA:
         print("ch uuid =", hex(evt["uuid"]),
               "desc uuid =", hex(evt["desc_uuid"]),
@@ -87,7 +113,7 @@ def cb(evt):
 
             elif val == "0200":
                 g_notify_enabled = False
-                print("indicate enabled (not using notify now)")
+                print("indicate enabled")
 
             elif val == "0000":
                 g_notify_enabled = False
@@ -96,22 +122,28 @@ def cb(evt):
 
 def main():
     global g_notify_thread_running
+    global g_ble_connected
+    global g_notify_enabled
 
     started = False
-    
+    notify_tid = None
+
     ble = BLE()
+
     try:
         ok = ble.init(cb)
         if not ok:
             print("BLE init failed")
             return
+
         ble.set_dataformat(BLE.DATAFMT_STRING)
 
-        ble.start("BLE_DEMO")
+        ble.start("Uniknect_BLE_DEMO")
         started = True
         print("BLE base started")
-        
+
         print(ble.get_addr())
+
         ble.add_service(CUSTOM_SERV_ID, CUSTOM_SERVICE_UUID, True)
 
         props = (BLE.PROP_READ | BLE.PROP_WRITE | BLE.PROP_NOTIFY | BLE.PROP_INDICATE)
@@ -151,14 +183,15 @@ def main():
         )
 
         ble.advertise()
-        print("Advertising started, device name = QuecDemo")
+        print("Advertising started, device name = Uniknect_BLE_DEMO")
         print("Press Ctrl+C to stop BLE...")
 
         # 启动通知线程
         g_notify_thread_running = True
-        semaphore = _thread.allocate_semaphore(0)
         _thread.stack_size(4096)
-        _thread.start_new_thread(notify_task, (ble,semaphore))
+        notify_tid = _thread.start_new_thread(notify_task, (ble,))
+        print("notify thread tid:", notify_tid)
+
         while True:
             utime.sleep(1)
 
@@ -171,7 +204,14 @@ def main():
     finally:
         # 先通知线程退出
         g_notify_thread_running = False
-        semaphore.acquire(2000)
+        g_notify_enabled = False
+        g_ble_connected = False
+
+        # 等待通知线程真正退出，避免 ble.stop/deinit 时线程还在 notify/indicate
+        if notify_tid is not None:
+            print("waiting notify thread exit...")
+            ret = _thread.join(notify_tid, 3000)
+            print("notify thread join:", ret)
 
         if started:
             try:
@@ -185,6 +225,5 @@ def main():
             print("BLE deinitialized")
         except Exception as e:
             print("BLE deinit failed:", e)
-
 
 main()

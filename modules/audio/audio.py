@@ -1,7 +1,7 @@
 from quectel import Audio
 import time
 
-RECORD_FILE = "SD:test.mp3"
+RECORD_FILE = "SD:test.wav"
 
 def event_cb(evt):
     if evt == Audio.PLAY_END:
