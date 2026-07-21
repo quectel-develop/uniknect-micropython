@@ -32,7 +32,7 @@ print("-" * 30)
 
 # 写入文本文件
 print("写入文本文件 test.txt...")
-with File.open("test.txt", "w") as f:
+with File.open("SD:test.txt", "w") as f:
     # 写入字符串（自动编码）
     f.write("Hello, Quectel!\n")
     f.write("这是第二行\n")

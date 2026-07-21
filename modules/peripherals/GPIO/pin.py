@@ -3,7 +3,6 @@ import time
 
 # 初始化连接到LED的引脚为输出模式
 led = Pin('LED_BLUE', Pin.OUT, Pin.PULL_NONE, value=0)
-time.sleep(2)
 led.value(1) #led.on()/led.high()
 time.sleep(2)
 led.value(0) #led.off()/led.low()
@@ -24,7 +23,6 @@ def button_handler(pin):
     last_interrupt_time = current_time
     
     # 原有的消抖逻辑
-    time.sleep_ms(20)
     
     # 延时后再次确认电平状态
     if pin.value() == 1:  # 确认是稳定的按下状态
